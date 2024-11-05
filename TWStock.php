@@ -54,7 +54,7 @@
                 <div class="col-auto">
                     <div class="input-group">
                         <input type="text" class="form-control" name="code" placeholder="請輸入股票代號"
-                            required value="<?php echo isset($_POST['code']) ? htmlspecialchars($_POST['code']) : ''; ?>">
+                            required value="<?php echo isset($_POST['code']) ? htmlspecialchars($_POST['code']) : '0050'; ?>">
                         <!--
                             htmlspecialchars 是 PHP 中的一個安全性處理函式，用來防止 XSS（跨網站指令碼）攻擊， 將特殊字符轉換為 HTML 實體。
                         -->
@@ -69,12 +69,13 @@
         </div>
 
         <?php
+        // 設置預設股票代號
+        $code = isset($_POST['code']) ? htmlspecialchars($_POST['code']) : '0050';
+
         if (isset($_POST['code'])) {
             try {
-                // file_get_contents() 函数是用来将文件的内容读入到一个字符串中的首选方法。
-                // 在PHP 之中可以透過time(); 這個函數來取得系統的時間，其返回的值是Unix時間戳(Unix timestamp)，其值是一個由1970年1月1日00:00:00 
-                // 起到現在時間經過的秒數，對於機器才說這是紀錄時間最方便的方式，但是這個時間並不適合人類來閱讀，所以PHP有另一個函數date()。
-                $stock = @file_get_contents("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{$_POST['code']}.tw&json=1&delay=0&_=" . time() . "&lang=zh_tw");
+                // 使用 $code 變數來生成請求的 URL
+                $stock = @file_get_contents("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{$code}.tw&json=1&delay=0&_=" . time() . "&lang=zh_tw");
 
                 if ($stock === false) {
                     // throw new Exception()是為了發出一個異常（異常提示）的語法
@@ -138,6 +139,7 @@
                 </div>
         <?php
 
+
                 // try {
                 //     // 假設這是連接資料庫的程式碼
                 //     $db = new PDO("mysql:host=localhost;dbname=test", "user", "wrong_password");
@@ -153,6 +155,7 @@
             }
         }
         ?>
+
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
