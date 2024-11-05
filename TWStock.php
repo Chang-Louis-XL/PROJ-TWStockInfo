@@ -69,10 +69,10 @@
         </div>
 
         <?php
-        // 設置預設股票代號
+        // // 設置預設股票代號
         $code = isset($_POST['code']) ? htmlspecialchars($_POST['code']) : '0050';
 
-        if (isset($_POST['code'])) {
+        if ($code) {
             try {
                 // 使用 $code 變數來生成請求的 URL
                 $stock = @file_get_contents("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{$code}.tw&json=1&delay=0&_=" . time() . "&lang=zh_tw");
