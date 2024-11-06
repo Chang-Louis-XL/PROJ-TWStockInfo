@@ -74,18 +74,29 @@
 
         if ($code) {
             try {
-                // 使用 $code 變數來生成請求的 URL
-                $stock = @file_get_contents("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{$code}.tw&json=1&delay=0&_=" . time() . "&lang=zh_tw");
-
-                if ($stock === false) {
-                    // throw new Exception()是為了發出一個異常（異常提示）的語法
-                    throw new Exception("無法取得股票資料");
+                // 函數：嘗試獲取股票資料
+                function getStockData($code, $market) {
+                    $url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={$market}_{$code}.tw&json=1&delay=0&_=" . time() . "&lang=zh_tw";
+                    $response = @file_get_contents($url);
+                    
+                    if ($response === false) {
+                        return null;
+                    }
+                    
+                    return json_decode($response);
                 }
-
-                $stock = json_decode($stock);
-
-                if (!isset($stock->msgArray[0]->n)) {
-                    throw new Exception("找不到此股票資料");
+                
+                // 先試上市
+                $stock = getStockData($code, 'tse');
+                
+                // 如果上市找不到或資料無效，試上櫃
+                if ($stock === null || !isset($stock->msgArray[0]->n)) {
+                    $stock = getStockData($code, 'otc');
+                    
+                    // 如果上櫃也找不到或資料無效
+                    if ($stock === null || !isset($stock->msgArray[0]->n)) {
+                        throw new Exception("找不到此股票資料");
+                    }
                 }
 
                 $stockInfo = $stock->msgArray[0];
