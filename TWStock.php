@@ -75,31 +75,41 @@
         if ($code) {
             try {
                 // 函數：嘗試獲取股票資料
-                function getStockData($code, $market) {
+                function getStockData($code, $market)
+                {
                     $url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={$market}_{$code}.tw&json=1&delay=0&_=" . time() . "&lang=zh_tw";
                     $response = @file_get_contents($url);
-                    
+
                     if ($response === false) {
                         return null;
                     }
-                    
+
                     return json_decode($response);
                 }
-                
+
                 // 先試上市
                 $stock = getStockData($code, 'tse');
-                
+
                 // 如果上市找不到或資料無效，試上櫃
                 if ($stock === null || !isset($stock->msgArray[0]->n)) {
                     $stock = getStockData($code, 'otc');
-                    
+
                     // 如果上櫃也找不到或資料無效
                     if ($stock === null || !isset($stock->msgArray[0]->n)) {
                         throw new Exception("找不到此股票資料");
                     }
                 }
 
+                // 檢查是否有最新成交價
+                if (
+                    !isset($stock->msgArray[0]->z) || $stock->msgArray[0]->z === '-'
+                ) {
+                    throw new Exception("請間隔10秒後再次查詢");
+                }
+
+
                 $stockInfo = $stock->msgArray[0];
+                echo $stockInfo->z;
                 $priceChange = floatval($stockInfo->z) - floatval($stockInfo->y);
                 $changePercentage = ($priceChange / floatval($stockInfo->y)) * 100;
                 $priceClass = $priceChange >= 0 ? 'price-up' : 'price-down';
@@ -173,56 +183,102 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script>
         $(document).ready(function() {
-            // 如果有圖表容器，初始化圖表
-            // 檢查是否存在 ID 為 'priceChart' 的元素
             if ($('#priceChart').length) {
-                // 初始化 ECharts 圖表，並指定在 'priceChart' 元素中繪製
                 const chart = echarts.init($('#priceChart')[0]);
 
-                // 定義圖表的配置選項
-                const option = {
-                    // 圖表標題設定
-                    title: {
-                        text: '股價走勢'
-                    },
+                let chartData = [];
+                let labels = [];
 
-                    // 提示框（滑鼠移到數據點時顯示的資訊）配置
-                    tooltip: {
-                        trigger: 'axis' // 觸發方式為：滑鼠移到軸線上
-                    },
+                try {
+                    <?php
+                    if (isset($stockInfo)) {
+                        $dataPoints = [
+                            ['o', '開盤'],
+                            ['h', '最高'],
+                            ['l', '最低'],
+                            ['z', '現價']
+                        ];
 
-                    // X軸配置
-                    xAxis: {
-                        type: 'category', // 類別型，用於顯示文字類型的資料
-                        data: ['開盤', '最高', '最低', '現價'] // X軸的標籤
-                    },
-
-                    // Y軸配置
-                    yAxis: {
-                        type: 'value', // 數值型
-                        scale: true // 自動調整刻度，不會從0開始
-                    },
-
-                    // 數據系列配置
-                    series: [{
-                        // 資料數組，從PHP獲取股票資訊
-                        data: [
-                            <?php
-                            if (isset($stockInfo)) {
-                                echo $stockInfo->o . ',';  // 開盤價
-                                echo $stockInfo->h . ',';  // 最高價
-                                echo $stockInfo->l . ',';  // 最低價
-                                echo $stockInfo->z;        // 現價
+                        foreach ($dataPoints as $point) {
+                            $value = isset($stockInfo->{$point[0]}) ? $stockInfo->{$point[0]} : null;
+                            if ($value !== null && $value !== '' && is_numeric($value)) {
+                                // 過濾掉非數字和無效值
+                                $cleanValue = filter_var($value, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+                                if ($cleanValue !== false) {
+                                    echo "chartData.push(" . floatval($cleanValue) . ");";
+                                    echo "labels.push('" . $point[1] . "');";
+                                }
                             }
-                            ?>
-                        ],
-                        type: 'line', // 圖表類型為線圖
-                        smooth: true // 使用平滑曲線
-                    }]
-                };
+                        }
+                    }
+                    ?>
 
-                // 將配置應用到圖表
-                chart.setOption(option);
+                    // 確保數據陣列中沒有無效值
+                    chartData = chartData.filter(value => !isNaN(value) && value !== null && value !== '');
+
+                    const option = {
+                        title: {
+                            text: '股價走勢'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            formatter: function(params) {
+                                if (params[0] && typeof params[0].value === 'number') {
+                                    return params[0].name + ': ' + params[0].value.toFixed(2);
+                                }
+                                return '';
+                            }
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: labels
+                        },
+                        yAxis: {
+                            type: 'value',
+                            scale: true,
+                            // 不標數字的寫法
+                            // axisLabel: {
+                            // formatter: '{value}'
+                            //  } 
+
+                            axisLabel: {
+                                formatter: function(value) {
+                                    return value.toFixed(2);
+                                }
+                            }
+                        },
+                        series: [{
+                            data: chartData,
+                            type: 'line',
+                            smooth: true,
+                            label: {
+                                show: true,
+                                formatter: function(params) {
+                                    if (typeof params.value === 'number') {
+                                        return params.value.toFixed(2);
+                                    }
+                                    return '';
+                                }
+                            },
+                            connectNulls: true // 連接空值點
+                        }]
+                    };
+
+                    // 只在有有效數據時才渲染圖表
+                    if (chartData.length > 0) {
+                        chart.setOption(option);
+
+                        // 添加視窗調整時自動重置圖表大小的功能
+                        window.addEventListener('resize', function() {
+                            chart.resize();
+                        });
+                    } else {
+                        $('#priceChart').html('<div class="alert alert-info">暫無股價數據</div>');
+                    }
+                } catch (error) {
+                    console.error('圖表初始化錯誤:', error);
+                    $('#priceChart').html('<div class="alert alert-danger">圖表載入失敗</div>');
+                }
             }
         });
     </script>
